@@ -45,6 +45,7 @@
       let alternate = false;
       
       // Process digits from right to left (excluding the last checksum digit)
+      // Starting from the second-to-last digit (position 11, 0-indexed)
       for (let i = 11; i >= 0; i--) {
         let digit = parseInt(id[i]);
         
@@ -74,6 +75,22 @@
              date.getDate() === day;
     }
 
+    function determineFullYear(year) {
+      // Current year for comparison
+      const currentYear = new Date().getFullYear();
+      const currentYearShort = currentYear % 100;
+      
+      // If the year is greater than current year (short form), it's likely 1900s
+      // If the year is less than or equal to current year (short form), it could be 2000s
+      // For years 00-24 (as of 2024), assume 2000s
+      // For years 25-99, assume 1900s
+      if (year <= 24) {
+        return 2000 + year;
+      } else {
+        return 1900 + year;
+      }
+    }
+
     function checkID(id) {
       const out = document.getElementById("output");
       
@@ -94,8 +111,8 @@
       const month = parseInt(birth.slice(2, 4));
       const day = parseInt(birth.slice(4, 6));
       
-      // Determine full year (assume 1900s for years 00-99)
-      const fullYear = year <= 99 ? 1900 + year : 2000 + year;
+      // Determine full year using improved logic
+      const fullYear = determineFullYear(year);
       
       // Validate date
       if (!isValidDate(fullYear, month, day)) {
@@ -106,7 +123,7 @@
       // Check if person would be alive (reasonable age check)
       const currentYear = new Date().getFullYear();
       const age = currentYear - fullYear;
-      if (age < 0 || age > 120) {
+      if (age < 0 || age > 150) {
         out.innerHTML = "<span class='bad'>❌ Unrealistic birth year.</span>";
         return;
       }
@@ -114,52 +131,68 @@
       // Validate Luhn checksum
       const isValid = luhnCheck(id);
       
-      // Determine gender
+      // Determine gender based on gender sequence (digits 7-10)
       const gender = genderSeq >= 5000 ? "Male" : "Female";
       const seventhDigit = id[6];
 
-      // 7th digit likelihood analysis
+      // 7th digit likelihood analysis (more accurate)
       let likelihood = "";
       let likelihoodClass = "";
       
       if (gender === "Male") {
-        if (["5", "6"].includes(seventhDigit)) {
-          likelihood = "✅ Common for males";
-          likelihoodClass = "ok";
-        } else if (["7", "8"].includes(seventhDigit)) {
-          likelihood = "⚠️ Less common for males";
-          likelihoodClass = "warn";
-        } else if (seventhDigit === "9") {
-          likelihood = "⚠️ Rare for males";
-          likelihoodClass = "warn";
+        if (["5", "6", "7", "8", "9"].includes(seventhDigit)) {
+          if (["5", "6"].includes(seventhDigit)) {
+            likelihood = "✅ Very common for males";
+            likelihoodClass = "ok";
+          } else {
+            likelihood = "✅ Valid for males";
+            likelihoodClass = "ok";
+          }
         } else {
           likelihood = "❌ Invalid for males (should be 5-9)";
           likelihoodClass = "bad";
         }
       } else {
-        if (["0", "1", "2"].includes(seventhDigit)) {
-          likelihood = "✅ Common for females";
-          likelihoodClass = "ok";
-        } else if (["3", "4"].includes(seventhDigit)) {
-          likelihood = "⚠️ Less common for females";
-          likelihoodClass = "warn";
+        if (["0", "1", "2", "3", "4"].includes(seventhDigit)) {
+          if (["0", "1", "2"].includes(seventhDigit)) {
+            likelihood = "✅ Very common for females";
+            likelihoodClass = "ok";
+          } else {
+            likelihood = "✅ Valid for females";
+            likelihoodClass = "ok";
+          }
         } else {
           likelihood = "❌ Invalid for females (should be 0-4)";
           likelihoodClass = "bad";
         }
       }
 
+      // Validate month and day ranges
+      if (month < 1 || month > 12) {
+        out.innerHTML = "<span class='bad'>❌ Invalid month (must be 01-12).</span>";
+        return;
+      }
+
+      if (day < 1 || day > 31) {
+        out.innerHTML = "<span class='bad'>❌ Invalid day (must be 01-31).</span>";
+        return;
+      }
+
       // Format birth date properly
       const formattedDate = `${fullYear}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
+      // Citizenship status
+      const citizenshipStatus = citizenship === "0" ? "SA Citizen" : (citizenship === "1" ? "Permanent Resident" : "Unknown Status");
 
       out.innerHTML = `
         <p><strong>🎂 Birthdate:</strong> ${formattedDate} (Age: ~${age})</p>
         <p><strong>🧬 Gender:</strong> ${gender} (Sequence: ${genderSeq})</p>
         <p><strong>🔢 7th Digit:</strong> ${seventhDigit} → <span class='${likelihoodClass}'>${likelihood}</span></p>
-        <p><strong>🪪 Citizenship:</strong> ${citizenship === "0" ? "SA Citizen" : "Permanent Resident"}</p>
+        <p><strong>🪪 Citizenship:</strong> ${citizenshipStatus}</p>
         <p><strong>🏛️ Race Digit:</strong> ${raceDigit} (Historical - no longer used)</p>
         <p><strong>🔐 Checksum:</strong> <span class='${isValid ? "ok" : "bad"}'>${isValid ? "✅ Valid (Luhn algorithm passed)" : "❌ Invalid (Luhn algorithm failed)"}</span></p>
         ${!isValid ? "<p><span class='bad'>⚠️ This ID number appears to be invalid or fake.</span></p>" : ""}
+        ${isValid ? "<p><span class='ok'>✅ This ID number appears to be valid according to SA ID standards.</span></p>" : ""}
       `;
     }
 
