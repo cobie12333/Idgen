@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>SA ID Checker</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', sans-serif;
+      background: #111;
+      color: #fff;
+      padding: 2em;
+      max-width: 500px;
+      margin: auto;
+    }
+    input {
+      width: 100%;
+      font-size: 1.2em;
+      padding: 10px;
+      border: none;
+      border-radius: 5px;
+      margin-top: 1em;
+      box-sizing: border-box;
+    }
+    .output {
+      margin-top: 2em;
+      background: #222;
+      padding: 1em;
+      border-radius: 8px;
+      font-size: 1.1em;
+    }
+    .ok { color: #0f0; }
+    .warn { color: orange; }
+    .bad { color: red; }
+  </style>
+</head>
+<body>
+  <h2>🇿🇦 SA ID Validator + 7th Digit Checker</h2>
+  <p>Enter a 13-digit SA ID:</p>
+  <input type="text" id="idInput" maxlength="13" placeholder="e.g. 9004271937081">
+  <div class="output" id="output"></div>
+
+  <script>
+    function luhnCheck(id) {
+      let sum = 0;
+      let alternate = false;
+      
+      // Process digits from right to left (excluding the last checksum digit)
+      for (let i = 11; i >= 0; i--) {
+        let digit = parseInt(id[i]);
+        
+        if (alternate) {
+          digit *= 2;
+          if (digit > 9) {
+            digit = Math.floor(digit / 10) + (digit % 10);
+          }
+        }
+        
+        sum += digit;
+        alternate = !alternate;
+      }
+      
+      // Calculate what the checksum digit should be
+      const calculatedChecksum = (10 - (sum % 10)) % 10;
+      const providedChecksum = parseInt(id[12]);
+      
+      return calculatedChecksum === providedChecksum;
+    }
+
+    function isValidDate(year, month, day) {
+      // Check if the date is valid
+      const date = new Date(year, month - 1, day);
+      return date.getFullYear() === year && 
+             date.getMonth() === month - 1 && 
+             date.getDate() === day;
+    }
+
+    function checkID(id) {
+      const out = document.getElementById("output");
+      
+      // Basic format check
+      if (!/^\d{13}$/.test(id)) {
+        out.innerHTML = "<span class='bad'>❌ ID must be 13 digits.</span>";
+        return;
+      }
+
+      const birth = id.slice(0, 6);
+      const genderSeq = parseInt(id.slice(6, 10));
+      const citizenship = id[10];
+      const raceDigit = id[11]; // 11th digit (race - historical, now unused)
+      const checkDigit = id[12];
+      
+      // Parse birth date
+      const year = parseInt(birth.slice(0, 2));
+      const month = parseInt(birth.slice(2, 4));
+      const day = parseInt(birth.slice(4, 6));
+      
+      // Determine full year (assume 1900s for years 00-99)
+      const fullYear = year <= 99 ? 1900 + year : 2000 + year;
+      
+      // Validate date
+      if (!isValidDate(fullYear, month, day)) {
+        out.innerHTML = "<span class='bad'>❌ Invalid birth date.</span>";
+        return;
+      }
+      
+      // Check if person would be alive (reasonable age check)
+      const currentYear = new Date().getFullYear();
+      const age = currentYear - fullYear;
+      if (age < 0 || age > 120) {
+        out.innerHTML = "<span class='bad'>❌ Unrealistic birth year.</span>";
+        return;
+      }
+
+      // Validate Luhn checksum
+      const isValid = luhnCheck(id);
+      
+      // Determine gender
+      const gender = genderSeq >= 5000 ? "Male" : "Female";
+      const seventhDigit = id[6];
+
+      // 7th digit likelihood analysis
+      let likelihood = "";
+      let likelihoodClass = "";
+      
+      if (gender === "Male") {
+        if (["5", "6"].includes(seventhDigit)) {
+          likelihood = "✅ Common for males";
+          likelihoodClass = "ok";
+        } else if (["7", "8"].includes(seventhDigit)) {
+          likelihood = "⚠️ Less common for males";
+          likelihoodClass = "warn";
+        } else if (seventhDigit === "9") {
+          likelihood = "⚠️ Rare for males";
+          likelihoodClass = "warn";
+        } else {
+          likelihood = "❌ Invalid for males (should be 5-9)";
+          likelihoodClass = "bad";
+        }
+      } else {
+        if (["0", "1", "2"].includes(seventhDigit)) {
+          likelihood = "✅ Common for females";
+          likelihoodClass = "ok";
+        } else if (["3", "4"].includes(seventhDigit)) {
+          likelihood = "⚠️ Less common for females";
+          likelihoodClass = "warn";
+        } else {
+          likelihood = "❌ Invalid for females (should be 0-4)";
+          likelihoodClass = "bad";
+        }
+      }
+
+      // Format birth date properly
+      const formattedDate = `${fullYear}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
+
+      out.innerHTML = `
+        <p><strong>🎂 Birthdate:</strong> ${formattedDate} (Age: ~${age})</p>
+        <p><strong>🧬 Gender:</strong> ${gender} (Sequence: ${genderSeq})</p>
+        <p><strong>🔢 7th Digit:</strong> ${seventhDigit} → <span class='${likelihoodClass}'>${likelihood}</span></p>
+        <p><strong>🪪 Citizenship:</strong> ${citizenship === "0" ? "SA Citizen" : "Permanent Resident"}</p>
+        <p><strong>🏛️ Race Digit:</strong> ${raceDigit} (Historical - no longer used)</p>
+        <p><strong>🔐 Checksum:</strong> <span class='${isValid ? "ok" : "bad"}'>${isValid ? "✅ Valid (Luhn algorithm passed)" : "❌ Invalid (Luhn algorithm failed)"}</span></p>
+        ${!isValid ? "<p><span class='bad'>⚠️ This ID number appears to be invalid or fake.</span></p>" : ""}
+      `;
+    }
+
+    // Real-time validation as user types
+    document.getElementById("idInput").addEventListener("input", function() {
+      const id = this.value.trim();
+      if (id.length === 13) {
+        checkID(id);
+      } else if (id.length > 0) {
+        document.getElementById("output").innerHTML = `<span class='warn'>⏳ Enter ${13 - id.length} more digit(s)...</span>`;
+      } else {
+        document.getElementById("output").innerHTML = "";
+      }
+    });
+
+    // Also check on paste
+    document.getElementById("idInput").addEventListener("paste", function() {
+      setTimeout(() => {
+        const id = this.value.trim();
+        if (id.length === 13) {
+          checkID(id);
+        }
+      }, 100);
+    });
+  </script>
+</body>
+</html>
