@@ -1374,6 +1374,17 @@
         return (10 - (sum % 10)) % 10;
     }
 
+    // Helper function to determine full year from 2-digit year
+    function determineFullYear(year) {
+        // For years 00-24 (as of 2024), assume 2000s
+        // For years 25-99, assume 1900s
+        if (year <= 24) {
+            return 2000 + year;
+        } else {
+            return 1900 + year;
+        }
+    }
+
     // Comprehensive SA ID Validation
     function validateSAID(id) {
         if (!/^\d{13}$/.test(id)) {
@@ -1384,12 +1395,12 @@
         const month = parseInt(id.substring(2, 4));
         const day = parseInt(id.substring(4, 6));
         const genderDigit = parseInt(id.substring(6, 7));
+        const genderSeq = parseInt(id.substring(6, 10));
         const provinceCode = parseInt(id.substring(10, 11));
         const checksumDigit = parseInt(id.substring(12, 13));
 
-        // Date validation
-        const currentYear = new Date().getFullYear();
-        const fullYear = (year < (currentYear % 100)) ? 2000 + year : 1900 + year;
+        // Date validation with improved year logic
+        const fullYear = determineFullYear(year);
         const date = new Date(fullYear, month - 1, day);
         
         if (date.getFullYear() !== fullYear || date.getMonth() !== month - 1 || date.getDate() !== day) {
@@ -1399,9 +1410,26 @@
             return { isValid: false, reason: "Birth date cannot be in the future." };
         }
 
-        // Gender validation
+        // Validate month and day ranges
+        if (month < 1 || month > 12) {
+            return { isValid: false, reason: "Invalid month (must be 01-12)." };
+        }
+        if (day < 1 || day > 31) {
+            return { isValid: false, reason: "Invalid day (must be 01-31)." };
+        }
+
+        // Gender validation - more comprehensive
         if (genderDigit < 0 || genderDigit > 9) {
             return { isValid: false, reason: "Invalid gender digit." };
+        }
+
+        // Check gender consistency
+        const gender = genderSeq >= 5000 ? "Male" : "Female";
+        if (gender === "Male" && (genderDigit < 5 || genderDigit > 9)) {
+            return { isValid: false, reason: "Gender sequence indicates male but 7th digit is not 5-9." };
+        }
+        if (gender === "Female" && (genderDigit < 0 || genderDigit > 4)) {
+            return { isValid: false, reason: "Gender sequence indicates female but 7th digit is not 0-4." };
         }
 
         // Province validation
